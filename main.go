@@ -25,7 +25,7 @@ func http_server() {
 	startPushUpdates(ws_hub)
 
 	http.HandleFunc("/greet", greet_http_path)
-
+	// TODO: Add a rest API to turn kichen lights/light on/off via MQTT publish home/kitchen/lights/(...)/set
 	http.HandleFunc("/ws", ws_hub.ws_serve)
 
 	log.Fatal(http.ListenAndServe(":8080", nil))

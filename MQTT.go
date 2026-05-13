@@ -3,7 +3,6 @@ package main
 import (
 	"fmt"
 	"log"
-	"time"
 
 	mqtt "github.com/eclipse/paho.mqtt.golang"
 )
@@ -23,12 +22,18 @@ func NewMQTTClient(brokerURL string, hub *ws_hub) *MQTTClient {
 	options := mqtt.NewClientOptions()
 	options.AddBroker(brokerURL)
 	options.SetClientID("smarthome-server")
-	options.SetKeepAlive(30 * time.Second)
-	options.SetAutoReconnect(true)
+	options.SetUsername("smarthome")
+	options.SetPassword("smarthome")
 
 	options.SetOnConnectHandler(func(c mqtt.Client) {
 		log.Println("MQTT connected")
-		m.subscribe("test/topic")
+		topics := map[string]byte{
+			"home/kichen/lights/+/state":               1, //this subscribes to /home/kitchen/(any light)/state
+			"home/devices/arduino/state":               2, //this subscribes to the arduino state so if the arduino unexpectedly disconnects from MQTT we can warn the user
+			"home/kitchen/sensors/temperature/+/value": 1, //this subscribes to /home/kitchen/sensors/temperature/(any sensor)/value
+			"home/kitchen/sensors/humidity/+/value":    1, //this subscribes to /home/kitchen/sensors/temperature/(any sensor)/value
+		}
+		m.subscribe(topics)
 	})
 
 	options.SetConnectionLostHandler(func(c mqtt.Client, err error) {
@@ -39,14 +44,18 @@ func NewMQTTClient(brokerURL string, hub *ws_hub) *MQTTClient {
 	return m
 }
 
+func (m *MQTTClient) publish(topic string, data string) {
+	m.client.Publish(topic, 0, false, data)
+}
+
 func (m *MQTTClient) Connect() error {
 	token := m.client.Connect()
 	token.Wait()
 	return token.Error()
 }
 
-func (m *MQTTClient) subscribe(topic string) {
-	token := m.client.Subscribe(topic, 1, func(_ mqtt.Client, msg mqtt.Message) {
+func (m *MQTTClient) subscribe(topic map[string]byte) {
+	token := m.client.SubscribeMultiple(topic, func(_ mqtt.Client, msg mqtt.Message) {
 		m.msgChan <- msg
 	})
 	token.Wait()
