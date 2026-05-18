@@ -1,7 +1,6 @@
 package main
 
 import (
-	"fmt"
 	"log"
 
 	mqtt "github.com/eclipse/paho.mqtt.golang"
@@ -28,7 +27,8 @@ func NewMQTTClient(brokerURL string, hub *ws_hub) *MQTTClient {
 	options.SetOnConnectHandler(func(c mqtt.Client) {
 		log.Println("MQTT connected")
 		topics := map[string]byte{
-			"home/kichen/lights/+/state":               1, //this subscribes to /home/kitchen/(any light)/state
+			"home/kitchen/lights/+/state":              1, //this subscribes to /home/kitchen/(any light)/state
+			"home/kitchen/lights/+/set":                1, //TODO: Remove this its debug
 			"home/devices/arduino/state":               2, //this subscribes to the arduino state so if the arduino unexpectedly disconnects from MQTT we can warn the user
 			"home/kitchen/sensors/temperature/+/value": 1, //this subscribes to /home/kitchen/sensors/temperature/(any sensor)/value
 			"home/kitchen/sensors/humidity/+/value":    1, //this subscribes to /home/kitchen/sensors/temperature/(any sensor)/value
@@ -45,7 +45,14 @@ func NewMQTTClient(brokerURL string, hub *ws_hub) *MQTTClient {
 }
 
 func (m *MQTTClient) publish(topic string, data string) {
-	m.client.Publish(topic, 0, false, data)
+	token := m.client.Publish(topic, 0, false, data)
+	// Wait for the publish to complete and check for errors
+	token.Wait()
+	if err := token.Error(); err != nil {
+		log.Printf("MQTT publish error to %s: %v", topic, err)
+		return
+	}
+	log.Printf("MQTT published message: %v to topic: %s", data, topic)
 }
 
 func (m *MQTTClient) Connect() error {
@@ -57,6 +64,7 @@ func (m *MQTTClient) Connect() error {
 func (m *MQTTClient) subscribe(topic map[string]byte) {
 	token := m.client.SubscribeMultiple(topic, func(_ mqtt.Client, msg mqtt.Message) {
 		m.msgChan <- msg
+		log.Printf("MQTT received message: %s", string(msg.Payload()))
 	})
 	token.Wait()
 	if err := token.Error(); err != nil {
@@ -68,10 +76,12 @@ func (m *MQTTClient) subscribe(topic map[string]byte) {
 // Call this in its own goroutine.
 func (m *MQTTClient) broadcast_to_websockets() {
 	for msg := range m.msgChan {
-		log.Println(fmt.Sprintf(`{"type":"payload":"%s"}`, msg.Topic(), msg.Payload()))
+		// Log and forward structured payload to websocket clients
+		payloadStr := string(msg.Payload())
+		log.Printf("MQTT received message - topic: %s payload: %s", msg.Topic(), payloadStr)
 		m.hub.broadcast <- message_out{
 			Type:    "server_push",
-			Payload: map[string]string{"message": fmt.Sprintf(`{"type":"payload":"%s"}`, msg.Topic(), msg.Payload())},
+			Payload: map[string]string{"topic": msg.Topic(), "payload": payloadStr},
 		}
 	}
 }

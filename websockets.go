@@ -151,7 +151,7 @@ func handleClientMessage(msg message_in) (*message_out, error) {
 	}
 }
 
-func startPushUpdates(hub *ws_hub) {
+/*func startPushUpdates(hub *ws_hub) {
 	go func() {
 		ticker := time.NewTicker(5 * time.Second)
 		defer ticker.Stop()
@@ -164,3 +164,4 @@ func startPushUpdates(hub *ws_hub) {
 		}
 	}()
 }
+*/
