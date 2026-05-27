@@ -6,6 +6,7 @@ import (
 	"log"
 	"net/http"
 	"strings"
+	"time"
 )
 
 func main() {
@@ -19,6 +20,17 @@ func http_server() {
 	ws_hub := NewHub()
 	go ws_hub.Run()
 	cfg := load_config()
+
+	// Initialize DB (driver-agnostic). If driver isn't registered at runtime,
+	// sql.Open will fail when trying to Ping.
+	db, err := NewSQLDB(cfg.DB.driver, cfg.DB.dsn, cfg.DB.maxOpenConns, cfg.DB.maxIdleConns, time.Duration(cfg.DB.connMaxLifetimeSeconds)*time.Second)
+	if err != nil {
+		log.Printf("DB initialize error: %v", err)
+	} else {
+		// keep DB open for the lifetime of the server
+		defer db.Close()
+	}
+
 	mqttClient := NewMQTTClient(cfg.MQTT, ws_hub)
 	if err := mqttClient.Connect(); err != nil {
 		log.Fatal(err)

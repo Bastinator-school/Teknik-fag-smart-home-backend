@@ -4,11 +4,13 @@ import (
 	"bufio"
 	"fmt"
 	"os"
+	"strconv"
 	"strings"
 )
 
 type config struct {
 	MQTT MQTT_options
+	DB   DB_options
 }
 
 type MQTT_options struct {
@@ -16,6 +18,14 @@ type MQTT_options struct {
 	broker_user string
 	broker_pass string
 	client_id   string // name the server will use when registering to MQTT
+}
+
+type DB_options struct {
+	driver                 string
+	dsn                    string
+	maxOpenConns           int
+	maxIdleConns           int
+	connMaxLifetimeSeconds int
 }
 
 func load_config() config {
@@ -27,6 +37,13 @@ func load_config() config {
 			broker_user: "smarthome",
 			broker_pass: "smarthome",
 			client_id:   "smarthome-server",
+		},
+		DB: DB_options{
+			driver:                 "sqlite",
+			dsn:                    "smarthome.db",
+			maxOpenConns:           10,
+			maxIdleConns:           2,
+			connMaxLifetimeSeconds: 3600,
 		},
 	}
 
@@ -60,6 +77,22 @@ func load_config() config {
 			cfg.MQTT.broker_pass = value
 		case "client_id":
 			cfg.MQTT.client_id = value
+		case "db_driver":
+			cfg.DB.driver = value
+		case "db_dsn":
+			cfg.DB.dsn = value
+		case "db_max_open_conns":
+			if v, err := strconv.Atoi(value); err == nil {
+				cfg.DB.maxOpenConns = v
+			}
+		case "db_max_idle_conns":
+			if v, err := strconv.Atoi(value); err == nil {
+				cfg.DB.maxIdleConns = v
+			}
+		case "db_conn_max_lifetime_secs":
+			if v, err := strconv.Atoi(value); err == nil {
+				cfg.DB.connMaxLifetimeSeconds = v
+			}
 		}
 	}
 
