@@ -12,14 +12,14 @@ func main() {
 
 	fmt.Println("starting server")
 	http_server()
-
-	fmt.Println("server started")
+	fmt.Println("server stopped")
 }
 
 func http_server() {
 	ws_hub := NewHub()
 	go ws_hub.Run()
-	mqttClient := NewMQTTClient("tcp://localhost:1883", ws_hub)
+	cfg := load_config()
+	mqttClient := NewMQTTClient(cfg.MQTT, ws_hub)
 	if err := mqttClient.Connect(); err != nil {
 		log.Fatal(err)
 	}
@@ -27,8 +27,19 @@ func http_server() {
 	//startPushUpdates(ws_hub)
 
 	http.HandleFunc("/greet", greet_http_path)
-	// TODO: Add a rest API to turn kichen lights/light on/off via MQTT publish home/kitchen/lights/(...)/set
+
 	http.HandleFunc("/set_lamp_state", func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Access-Control-Allow-Origin", "*")
+		w.Header().Set("Access-Control-Allow-Methods", "POST, OPTIONS")
+		w.Header().Set("Access-Control-Allow-Headers", "Content-Type")
+		// If you need cookies/auth, also add:
+		// w.Header().Set("Access-Control-Allow-Credentials", "true")
+
+		if r.Method == http.MethodOptions {
+			// Preflight request - no body, return OK
+			w.WriteHeader(http.StatusOK)
+			return
+		}
 		post_set_lamp_state(w, r, mqttClient)
 	})
 	http.HandleFunc("/ws", ws_hub.ws_serve)
@@ -42,6 +53,7 @@ func greet_http_path(w http.ResponseWriter, r *http.Request) {
 }
 
 func post_set_lamp_state(w http.ResponseWriter, r *http.Request, mqtt *MQTTClient) {
+	fmt.Println("Got request to set lamp state")
 	if r.Method != "POST" {
 		w.Header().Set("Allow", "POST")
 		w.WriteHeader(405)
@@ -50,7 +62,7 @@ func post_set_lamp_state(w http.ResponseWriter, r *http.Request, mqtt *MQTTClien
 	data := struct {
 		Room  string `json:"room"`
 		Lamp  string `json:"lamp"`
-		State string `json:"state"` //0/1 | on/off
+		State string `json:"state"` //   0/1 | on/off
 	}{}
 	if err := json.NewDecoder(r.Body).Decode(&data); err != nil {
 		w.Header().Set("Content-Type", "application/json")
@@ -62,7 +74,7 @@ func post_set_lamp_state(w http.ResponseWriter, r *http.Request, mqtt *MQTTClien
 	if data.State != "0" && data.State != "1" {
 		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(400)
-		log.Printf("invalid state: %d", data.State)
+		log.Printf("invalid state: %s", data.State)
 		json.NewEncoder(w).Encode(map[string]any{"error": "invalid state", "details": "state must be 0 or 1"})
 		return
 	}

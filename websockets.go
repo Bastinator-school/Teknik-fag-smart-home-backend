@@ -116,7 +116,6 @@ func (hub *ws_hub) ws_serve(writer http.ResponseWriter, request *http.Request) {
 			continue
 		}
 
-		// Dispatch to business logic based on message type.
 		response, err := handleClientMessage(msg)
 		if err != nil {
 			client.send <- message_out{Type: "error", Payload: err.Error()}
